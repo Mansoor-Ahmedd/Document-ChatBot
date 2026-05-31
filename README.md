@@ -418,8 +418,3 @@ BSCS – Applied Artificial Intelligence
 
 ---
 
-## 📜 License
-
-This project was developed for academic and learning purposes as part of the **Introduction to Applied Artificial Intelligence** course.
-
-Feel free to modify and extend it for educational use.
