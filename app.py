@@ -33,17 +33,33 @@ load_dotenv()
 def init_chromadb():
     try:
         client = chromadb.PersistentClient(path="./chroma_db")
+        
+        # List all collections to debug
+        collections = client.list_collections()
+        st.sidebar.info(f"Found collections: {[col.name for col in collections]}")
+        
         embedding_func = SentenceTransformerEmbeddingFunction(
             model_name="all-MiniLM-L6-v2"
         )
+        
         collection = client.get_collection(
             name="company_docs",
             embedding_function=embedding_func
         )
+        
         return collection
+        
     except Exception as e:
-        st.error(f"❌ ChromaDB Error: {str(e)}")
-        st.info("Make sure the 'chroma_db' folder exists with all required files inside.")
+        st.error(f"ChromaDB Loading Error: {str(e)}")
+        st.info("Trying to list available collections...")
+        
+        try:
+            client = chromadb.PersistentClient(path="./chroma_db")
+            collections = client.list_collections()
+            st.error(f"Available collections: {[col.name for col in collections]}")
+        except:
+            pass
+            
         st.stop()
 
 # =========================================================
