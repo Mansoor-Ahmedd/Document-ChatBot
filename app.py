@@ -1,5 +1,5 @@
 import sys
-# ==================== SQLITE FIX FOR STREAMLIT CLOUD ====================
+# ==================== CRITICAL FIX FOR STREAMLIT CLOUD ====================
 __import__('pysqlite3')
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 # =====================================================================
@@ -27,38 +27,29 @@ st.set_page_config(
 load_dotenv()
 
 # =========================================================
-# CHROMADB INITIALIZATION (Improved)
+# CHROMADB INITIALIZATION - FIXED FOR CLOUD
 # =========================================================
-@st.cache_resource
+@st.cache_resource(show_spinner="Loading knowledge base...")
 def init_chromadb():
     try:
-        st.info("🔄 Connecting to ChromaDB...")
         client = chromadb.PersistentClient(path="./chroma_db")
         
         embedding_func = SentenceTransformerEmbeddingFunction(
             model_name="all-MiniLM-L6-v2"
         )
         
-        # Use get_or_create_collection to fix version issues
+        # Use get_or_create_collection (more reliable on cloud)
         collection = client.get_or_create_collection(
             name="company_docs",
             embedding_function=embedding_func
         )
         
-        doc_count = collection.count()
-        st.success(f"✅ ChromaDB loaded successfully! ({doc_count} documents)")
-        
+        count = collection.count()
+        st.sidebar.success(f"✅ Loaded {count} document chunks")
         return collection
         
     except Exception as e:
-        st.error(f"❌ ChromaDB Error: {str(e)}")
-        st.info("Trying to debug available collections...")
-        try:
-            client = chromadb.PersistentClient(path="./chroma_db")
-            collections = client.list_collections()
-            st.error(f"Available collections: {[c.name for c in collections]}")
-        except Exception as debug_e:
-            st.error(f"Debug info: {str(debug_e)}")
+        st.error(f"ChromaDB Error: {str(e)}")
         st.stop()
 
 # =========================================================
@@ -81,7 +72,7 @@ try:
     llm = init_llm()
 
     st.title("🤖 Company Knowledge Assistant")
-    st.markdown("Ask me anything about company policies!")
+    st.markdown("**Ask me anything about company policies!**")
 
     # Session State
     if "messages" not in st.session_state:
@@ -91,11 +82,15 @@ try:
     with st.sidebar:
         st.header("About")
         st.markdown("""
-        This assistant answers questions based on your company documents.
+        This assistant uses your company documents to answer questions about:
+        - Vacation & Leave Policies
+        - Remote Work Guidelines  
+        - Benefits & Parental Leave
+        - HR Policies
         """)
         st.divider()
         st.metric("Documents Indexed", collection.count())
-        st.metric("Messages", len(st.session_state.messages))
+        st.metric("Chat Messages", len(st.session_state.messages))
         st.divider()
         if st.button("🗑️ Clear Chat History"):
             st.session_state.messages = []
@@ -103,17 +98,12 @@ try:
 
     # Welcome Message
     if len(st.session_state.messages) == 0:
-        welcome = """
-        Hi! 👋 I'm your **Company Knowledge Assistant**.
-
-        Ask me anything about:
-        - Vacation policies
-        - Remote work guidelines
-        - Benefits & Parental leave
-        - HR policies
-        """
         with st.chat_message("assistant"):
-            st.write(welcome)
+            st.write("""
+            Hi! 👋 I'm your Company Knowledge Assistant. 
+            
+            Ask me anything about company policies and I'll answer using the uploaded documents.
+            """)
 
     # Display Chat History
     for message in st.session_state.messages:
@@ -123,37 +113,24 @@ try:
     # RAG Function
     def get_rag_response(question, n_results=4):
         try:
-            results = collection.query(
-                query_texts=[question],
-                n_results=n_results
-            )
+            results = collection.query(query_texts=[question], n_results=n_results)
             contexts = results["documents"][0] if results.get("documents") else []
             
             if not contexts:
-                return "Sorry, I couldn't find relevant information in the documents."
+                return "Sorry, I couldn't find relevant information in the company documents."
 
             context_text = "\n\n".join(contexts)
 
             system_prompt = """
-You are a helpful company knowledge assistant.
-Answer ONLY using the provided context.
-If the answer is not in the context, say you don't know.
-Do not make up information.
-"""
-
-            user_prompt = f"""
-Context:
-{context_text}
-
-Question:
-{question}
-
-Answer based only on the context.
+You are a helpful, accurate company knowledge assistant.
+Answer ONLY using the provided context. 
+If the information is not in the context, say "I don't have that information."
+Do not make up answers.
 """
 
             response = llm.invoke([
                 SystemMessage(content=system_prompt),
-                HumanMessage(content=user_prompt)
+                HumanMessage(content=f"Context:\n{context_text}\n\nQuestion: {question}\nAnswer:")
             ])
             return response.content
 
@@ -167,7 +144,7 @@ Answer based only on the context.
             st.write(prompt)
 
         with st.chat_message("assistant"):
-            with st.spinner("Searching documents..."):
+            with st.spinner("Searching company documents..."):
                 response = get_rag_response(prompt)
                 st.write(response)
 
@@ -175,3 +152,4 @@ Answer based only on the context.
 
 except Exception as e:
     st.error(f"Application Error: {str(e)}")
+    st.info("Check that `runtime.txt` has `python-3.11.9` and ChromaDB folder is correct.")
