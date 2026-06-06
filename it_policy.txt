@@ -1,4 +1,0 @@
-IT Department Policy
-Laptop Policy: Employees get a company laptop. Must be returned upon leaving.
-Software: Only approved software can be installed.
-Security: Multi-factor authentication is mandatory.
