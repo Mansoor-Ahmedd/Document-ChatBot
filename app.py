@@ -1,3 +1,9 @@
+import sys
+# ==================== SQLITE FIX FOR STREAMLIT CLOUD ====================
+__import__('pysqlite3')
+sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+# =====================================================================
+
 import os
 import streamlit as st
 import chromadb
@@ -21,15 +27,15 @@ st.set_page_config(
 load_dotenv()
 
 # =========================================================
-# CHROMADB INITIALIZATION (using correct collection name)
+# CHROMADB INITIALIZATION
 # =========================================================
 @st.cache_resource
 def init_chromadb():
-    client = chromadb.PersistentClient(path="/tmp/.chroma")  # Important for Streamlit Cloud
+    client = chromadb.PersistentClient(path="./chroma_db")
     embedding_func = SentenceTransformerEmbeddingFunction(
         model_name="all-MiniLM-L6-v2"
     )
-    collection = client.get_or_create_collection(   # Use get_or_create instead of get
+    collection = client.get_collection(
         name="company_docs",
         embedding_function=embedding_func
     )
@@ -54,7 +60,6 @@ try:
     collection = init_chromadb()
     llm = init_llm()
 
-    # Optional: print to terminal for debugging
     print(f"✅ ChromaDB collection 'company_docs' has {collection.count()} documents")
 
     # =========================================================
@@ -130,7 +135,7 @@ try:
             )
             contexts = results["documents"][0] if results.get("documents") else []
             if not contexts:
-                return "No relevant information found."
+                return "Sorry, I couldn't find relevant information in the company documents."
 
             context_text = "\n\n".join(contexts)
 
@@ -138,7 +143,9 @@ try:
 You are a helpful company knowledge assistant.
 Answer ONLY using the provided context.
 If the answer is not present in the context, say that you don't know.
+Do not make up any information.
 """
+
             user_prompt = f"""
 Context:
 {context_text}
@@ -148,6 +155,7 @@ Question:
 
 Answer based only on the context above.
 """
+
             response = llm.invoke([
                 SystemMessage(content=system_prompt),
                 HumanMessage(content=user_prompt)
@@ -171,15 +179,12 @@ Answer based only on the context above.
 
         st.session_state.messages.append({"role": "assistant", "content": response})
 
-# =========================================================
-# ERROR HANDLING
-# =========================================================
 except Exception as e:
     st.error(f"Error: {str(e)}")
     st.info("""
 Make sure:
-- OPENROUTER_API_KEY exists in .env
-- chroma_db folder exists and contains collection 'company_docs'
-- You have run ingest.py successfully
+- You have created the **chroma_db** folder with all .bin and .sqlite3 files inside
+- OPENROUTER_API_KEY is added in .streamlit/secrets.toml
+- You are using Python 3.10 on Streamlit Cloud
 """)
     st.stop()
